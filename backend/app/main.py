@@ -1,0 +1,43 @@
+import asyncio
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config import settings
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start the Telegram bot in the background
+    from app.bot.bot import start_bot
+
+    bot_task = asyncio.create_task(start_bot())
+    yield
+    bot_task.cancel()
+    try:
+        await bot_task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(title="StudyBot API", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+from app.routers import auth, flashcards, materials  # noqa: E402
+
+app.include_router(auth.router, prefix="/api")
+app.include_router(materials.router, prefix="/api")
+app.include_router(flashcards.router, prefix="/api")
+
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
