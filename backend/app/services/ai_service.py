@@ -87,3 +87,44 @@ async def generate_flashcards(content: str, explanation: str | None = None) -> l
         cards = [{"front": "Error", "back": "AI returned invalid format. Please try again."}]
 
     return cards
+
+
+async def chat_with_context(
+    material_content: str,
+    material_explanation: str | None,
+    history: list[dict[str, str]],
+    user_message: str,
+) -> str:
+    """Chat about the material with full context."""
+    context = material_content
+    if material_explanation:
+        context += f"\n\n--- AI Explanation ---\n{material_explanation}"
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an expert tutor helping a student understand their study material. "
+                "Below is the study material the student uploaded. "
+                "Answer their questions based on this material. "
+                "If the question is not related to the material, politely steer back. "
+                "Be clear, detailed, and use examples when helpful.\n\n"
+                f"--- STUDY MATERIAL ---\n{context}\n--- END MATERIAL ---"
+            ),
+        },
+    ]
+
+    # Add conversation history
+    for msg in history:
+        messages.append({"role": msg["role"], "content": msg["content"]})
+
+    # Add new user message
+    messages.append({"role": "user", "content": user_message})
+
+    response = await client.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        temperature=0.7,
+        max_tokens=2000,
+    )
+    return response.choices[0].message.content

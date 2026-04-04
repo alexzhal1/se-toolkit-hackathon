@@ -30,6 +30,7 @@ class Material(Base):
 
     user: Mapped["User"] = relationship(back_populates="materials")
     flashcards: Mapped[list["Flashcard"]] = relationship(back_populates="material", cascade="all, delete-orphan")
+    chat_messages: Mapped[list["ChatMessage"]] = relationship(back_populates="material", cascade="all, delete-orphan")
 
 
 class Flashcard(Base):
@@ -42,3 +43,15 @@ class Flashcard(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     material: Mapped["Material"] = relationship(back_populates="flashcards")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column()  # "user" or "assistant"
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    material: Mapped["Material"] = relationship(back_populates="chat_messages")

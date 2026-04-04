@@ -5,6 +5,7 @@ import HomePage from "./pages/HomePage";
 import UploadPage from "./pages/UploadPage";
 import MaterialPage from "./pages/MaterialPage";
 import FlashcardsPage from "./pages/FlashcardsPage";
+import ChatPage from "./pages/ChatPage";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -68,6 +69,7 @@ export default function App() {
         />
         <Route path="/materials/:id" element={<MaterialPage />} />
         <Route path="/materials/:id/flashcards" element={<FlashcardsPage />} />
+        <Route path="/materials/:id/chat" element={<ChatPage />} />
       </Routes>
     </div>
   );

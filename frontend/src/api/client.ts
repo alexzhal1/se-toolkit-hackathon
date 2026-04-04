@@ -35,6 +35,13 @@ export interface Flashcard {
   back: string;
 }
 
+export interface ChatMessage {
+  id: number;
+  material_id: number;
+  role: "user" | "assistant";
+  content: string;
+}
+
 export const api = {
   auth(telegram_id: number, first_name: string): Promise<User> {
     return request("/auth", {
@@ -72,5 +79,37 @@ export const api = {
 
   generateFlashcards(materialId: number): Promise<Flashcard[]> {
     return request(`/materials/${materialId}/flashcards`, { method: "POST" });
+  },
+
+  uploadFile(userId: number, title: string, file: File): Promise<Material> {
+    const formData = new FormData();
+    formData.append("user_id", String(userId));
+    formData.append("title", title);
+    formData.append("file", file);
+    return fetch(`${API_BASE}/materials/upload`, {
+      method: "POST",
+      body: formData,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || "Upload failed");
+      }
+      return res.json();
+    });
+  },
+
+  getChatHistory(materialId: number): Promise<ChatMessage[]> {
+    return request(`/materials/${materialId}/chat`);
+  },
+
+  sendChatMessage(materialId: number, message: string): Promise<ChatMessage> {
+    return request(`/materials/${materialId}/chat`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    });
+  },
+
+  clearChat(materialId: number): Promise<void> {
+    return request(`/materials/${materialId}/chat`, { method: "DELETE" });
   },
 };

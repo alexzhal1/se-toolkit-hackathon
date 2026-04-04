@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+import io
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import Material
 from app.services.ai_service import explain_material
+from app.services.file_parser import extract_text_from_file
 
 router = APIRouter(tags=["materials"])
 
@@ -38,6 +41,38 @@ async def list_materials(user_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/materials", response_model=MaterialResponse)
 async def create_material(data: MaterialCreate, db: AsyncSession = Depends(get_db)):
     material = Material(user_id=data.user_id, title=data.title, content=data.content)
+    db.add(material)
+    await db.commit()
+    await db.refresh(material)
+    return material
+
+
+@router.post("/materials/upload", response_model=MaterialResponse)
+async def upload_file(
+    user_id: int = Form(...),
+    title: str = Form(""),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload a .pdf or .docx file and extract text as material."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in ("pdf", "docx"):
+        raise HTTPException(status_code=400, detail="Only .pdf and .docx files are supported")
+
+    file_bytes = await file.read()
+    try:
+        content = extract_text_from_file(file_bytes, ext)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {e}")
+
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="Could not extract text from file")
+
+    material_title = title or file.filename.rsplit(".", 1)[0]
+    material = Material(user_id=user_id, title=material_title, content=content)
     db.add(material)
     await db.commit()
     await db.refresh(material)

@@ -89,6 +89,10 @@ export default function MaterialPage() {
           Flashcards
         </Link>
 
+        <Link to={`/materials/${material.id}/chat`} className="btn btn-secondary">
+          Ask AI
+        </Link>
+
         <button className="btn btn-danger" onClick={handleDelete} disabled={deleting}>
           {deleting ? "Deleting..." : "Delete"}
         </button>
