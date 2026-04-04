@@ -12,7 +12,7 @@ client = AsyncOpenAI(
     base_url="https://api.deepseek.com",
 )
 
-MODEL = "deepseek-chat"
+MODEL = "deepseek-reasoner"
 
 
 async def explain_material(content: str) -> str:
@@ -21,22 +21,18 @@ async def explain_material(content: str) -> str:
         model=MODEL,
         messages=[
             {
-                "role": "system",
+                "role": "user",
                 "content": (
-                    "You are an expert tutor. The user will provide study material. "
+                    "You are an expert tutor. I will provide study material. "
                     "Your task is to explain it in a clear, structured, and detailed way. "
                     "Use headings, bullet points, and examples where appropriate. "
                     "Break down complex concepts into simpler parts. "
-                    "All responses must be in English."
+                    "All responses must be in English.\n\n"
+                    f"Please explain the following study material in detail:\n\n{content}"
                 ),
             },
-            {
-                "role": "user",
-                "content": f"Please explain the following study material in detail:\n\n{content}",
-            },
         ],
-        temperature=0.7,
-        max_tokens=4000,
+        max_tokens=20000,
     )
     return response.choices[0].message.content
 
@@ -51,7 +47,7 @@ async def generate_flashcards(content: str, explanation: str | None = None) -> l
         model=MODEL,
         messages=[
             {
-                "role": "system",
+                "role": "user",
                 "content": (
                     "You are an expert tutor creating flashcards for studying. "
                     "Generate 10-15 flashcards from the provided material. "
@@ -59,16 +55,12 @@ async def generate_flashcards(content: str, explanation: str | None = None) -> l
                     "Cover the key concepts thoroughly. "
                     "All content must be in English. "
                     "Return ONLY a JSON array with no extra text, like: "
-                    '[{"front": "...", "back": "..."}, ...]'
+                    '[{"front": "...", "back": "..."}, ...]\n\n'
+                    f"Create flashcards from this material:\n\n{context}"
                 ),
             },
-            {
-                "role": "user",
-                "content": f"Create flashcards from this material:\n\n{context}",
-            },
         ],
-        temperature=0.7,
-        max_tokens=4000,
+        max_tokens=20000,
     )
 
     raw = response.choices[0].message.content.strip()
@@ -100,31 +92,36 @@ async def chat_with_context(
     if material_explanation:
         context += f"\n\n--- AI Explanation ---\n{material_explanation}"
 
-    messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are an expert tutor helping a student understand their study material. "
-                "Below is the study material the student uploaded. "
-                "Answer their questions based on this material. "
-                "If the question is not related to the material, politely steer back. "
-                "Be clear, detailed, and use examples when helpful.\n\n"
-                f"--- STUDY MATERIAL ---\n{context}\n--- END MATERIAL ---"
-            ),
-        },
-    ]
+    # deepseek-reasoner: no system role, inject context into first user message
+    system_prompt = (
+        "You are an expert tutor helping a student understand their study material. "
+        "Below is the study material the student uploaded. "
+        "Answer their questions based on this material. "
+        "If the question is not related to the material, politely steer back. "
+        "Be clear, detailed, and use examples when helpful.\n\n"
+        f"--- STUDY MATERIAL ---\n{context}\n--- END MATERIAL ---"
+    )
+
+    messages: list[dict[str, str]] = []
 
     # Add conversation history
-    for msg in history:
-        messages.append({"role": msg["role"], "content": msg["content"]})
+    for i, msg in enumerate(history):
+        if i == 0 and msg["role"] == "user":
+            # Prepend context to first user message
+            messages.append({"role": "user", "content": f"{system_prompt}\n\n{msg['content']}"})
+        else:
+            messages.append({"role": msg["role"], "content": msg["content"]})
 
     # Add new user message
-    messages.append({"role": "user", "content": user_message})
+    if not messages:
+        # First message ever — include context
+        messages.append({"role": "user", "content": f"{system_prompt}\n\nMy question: {user_message}"})
+    else:
+        messages.append({"role": "user", "content": user_message})
 
     response = await client.chat.completions.create(
         model=MODEL,
         messages=messages,
-        temperature=0.7,
-        max_tokens=2000,
+        max_tokens=20000,
     )
     return response.choices[0].message.content
