@@ -77,7 +77,8 @@ class QuizQuestion(Base):
     quiz_id: Mapped[int] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"))
     question_text: Mapped[str] = mapped_column(Text)
     options: Mapped[list] = mapped_column(JSON)  # list of 4 strings
-    correct_answer_index: Mapped[int] = mapped_column(Integer)
+    correct_answer_indices: Mapped[list] = mapped_column(JSON)  # list of correct option indices
+    is_multi: Mapped[bool] = mapped_column(default=False)
     explanation: Mapped[str] = mapped_column(Text, default="")
 
     quiz: Mapped["Quiz"] = relationship(back_populates="questions")

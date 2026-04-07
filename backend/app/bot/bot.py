@@ -240,12 +240,17 @@ async def cmd_quiz(message: types.Message, command: CommandObject):
         db.add(quiz)
         await db.flush()
         for q in questions_data:
+            indices = q.get("correct_indices", [])
+            if not isinstance(indices, list):
+                indices = [indices]
+            indices = [int(i) for i in indices]
             db.add(
                 QuizQuestion(
                     quiz_id=quiz.id,
                     question_text=q.get("question", ""),
                     options=q.get("options", []),
-                    correct_answer_index=int(q.get("correct_index", 0)),
+                    correct_answer_indices=indices,
+                    is_multi=bool(q.get("multi", len(indices) > 1)),
                     explanation=q.get("explanation", ""),
                 )
             )
@@ -253,9 +258,15 @@ async def cmd_quiz(message: types.Message, command: CommandObject):
 
     lines = [f"📝 Quiz with {len(questions_data)} questions:\n"]
     for i, q in enumerate(questions_data, 1):
-        lines.append(f"*{i}. {q.get('question', '')}*")
+        indices = q.get("correct_indices", [])
+        if not isinstance(indices, list):
+            indices = [indices]
+        indices = {int(x) for x in indices}
+        is_multi = bool(q.get("multi", len(indices) > 1))
+        tag = " (multi)" if is_multi else ""
+        lines.append(f"*{i}. {q.get('question', '')}*{tag}")
         for j, opt in enumerate(q.get("options", [])):
-            marker = "✅" if j == int(q.get("correct_index", 0)) else "▫️"
+            marker = "✅" if j in indices else "▫️"
             lines.append(f"  {marker} {opt}")
         if q.get("explanation"):
             lines.append(f"  _💡 {q['explanation']}_")

@@ -46,7 +46,8 @@ export interface QuizQuestion {
   id: number;
   question_text: string;
   options: string[];
-  correct_answer_index: number;
+  correct_answer_indices: number[];
+  is_multi: boolean;
   explanation: string;
 }
 

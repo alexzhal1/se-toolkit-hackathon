@@ -512,7 +512,39 @@ label {
   display: inline;
 }
 
-/* KaTeX overrides */
+/* KaTeX overrides — wrap long formulas */
 .katex {
   font-size: 1.05em;
+}
+
+/* Display math: allow horizontal scroll if formula is too long */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  padding: 8px 0;
+}
+
+.katex-display > .katex {
+  white-space: normal;
+}
+
+/* Inline math: break lines when needed */
+.katex-html {
+  white-space: normal !important;
+}
+
+/* Ensure markdown container doesn't overflow */
+.explanation,
+.chat-bubble,
+.quiz-explanation {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  max-width: 100%;
+}
+
+.explanation .katex-display,
+.chat-bubble .katex-display,
+.quiz-explanation .katex-display {
+  margin: 12px 0;
 }

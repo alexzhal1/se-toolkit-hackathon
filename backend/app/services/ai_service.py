@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 
 from openai import AsyncOpenAI
 
@@ -32,7 +33,7 @@ async def explain_material(content: str) -> str:
                 ),
             },
         ],
-        max_tokens=20000,
+        max_tokens=10000,
     )
     return response.choices[0].message.content
 
@@ -60,7 +61,7 @@ async def generate_flashcards(content: str, explanation: str | None = None) -> l
                 ),
             },
         ],
-        max_tokens=20000,
+        max_tokens=10000,
     )
 
     raw = response.choices[0].message.content.strip()
@@ -92,8 +93,33 @@ def _strip_code_fences(raw: str) -> str:
     return raw
 
 
+def _shuffle_options(question: dict) -> dict:
+    """Shuffle options in-place and remap correct_indices accordingly."""
+    options = list(question.get("options", []))
+    correct = question.get("correct_indices") or []
+    if not isinstance(correct, list):
+        correct = [correct]
+    correct = [int(i) for i in correct if isinstance(i, (int, float))]
+
+    if not options:
+        question["options"] = []
+        question["correct_indices"] = []
+        return question
+
+    # Pair each option with a flag: is it correct?
+    pairs = [(opt, idx in correct) for idx, opt in enumerate(options)]
+    random.shuffle(pairs)
+
+    new_options = [p[0] for p in pairs]
+    new_correct = [i for i, p in enumerate(pairs) if p[1]]
+
+    question["options"] = new_options
+    question["correct_indices"] = new_correct
+    return question
+
+
 async def generate_quiz(content: str, explanation: str | None = None) -> list[dict]:
-    """Generate a multiple-choice quiz from the study material."""
+    """Generate a multiple-choice quiz (single + multi answer) from the study material."""
     context = content
     if explanation:
         context += f"\n\nExplanation:\n{explanation}"
@@ -104,19 +130,27 @@ async def generate_quiz(content: str, explanation: str | None = None) -> list[di
             {
                 "role": "user",
                 "content": (
-                    "You are an expert tutor creating a multiple-choice quiz. "
+                    "You are an expert tutor creating a quiz. "
                     "Generate exactly 10 questions from the provided material. "
-                    "Each question must have 4 options and exactly one correct answer. "
-                    "Provide a brief explanation of why the correct answer is right. "
+                    "Each question must have 4 options. "
+                    "Mix single-answer and multi-answer questions: roughly 7 single-answer "
+                    "(exactly one correct option) and 3 multi-answer (2 or more correct options). "
+                    "For each question, provide 'correct_indices' as a JSON array of 0-based "
+                    "indices of correct options. For single-answer questions the array has one "
+                    "element; for multi-answer it has two or more. "
+                    "Provide a brief explanation of the correct answer(s). "
+                    "IMPORTANT: Do NOT always place correct answers first — vary their positions. "
                     "All content must be in English. "
                     "Return ONLY a JSON array with no extra text, in this format:\n"
                     '[{"question": "...", "options": ["A", "B", "C", "D"], '
-                    '"correct_index": 0, "explanation": "..."}, ...]\n\n'
+                    '"correct_indices": [2], "multi": false, "explanation": "..."}, '
+                    '{"question": "...", "options": ["W", "X", "Y", "Z"], '
+                    '"correct_indices": [0, 2], "multi": true, "explanation": "..."}, ...]\n\n'
                     f"Material:\n\n{context}"
                 ),
             },
         ],
-        max_tokens=20000,
+        max_tokens=10000,
     )
 
     raw = _strip_code_fences(response.choices[0].message.content)
@@ -124,7 +158,17 @@ async def generate_quiz(content: str, explanation: str | None = None) -> list[di
         questions = json.loads(raw)
     except json.JSONDecodeError:
         logger.error("Failed to parse quiz JSON: %s", raw[:200])
-        questions = []
+        return []
+
+    # Backwards-compat: accept old "correct_index" as a fallback
+    for q in questions:
+        if "correct_indices" not in q and "correct_index" in q:
+            q["correct_indices"] = [int(q["correct_index"])]
+        q["multi"] = bool(q.get("multi", len(q.get("correct_indices", [])) > 1))
+
+    # Shuffle options so the correct answer is not always first
+    for q in questions:
+        _shuffle_options(q)
 
     return questions
 
@@ -170,6 +214,6 @@ async def chat_with_context(
     response = await client.chat.completions.create(
         model=MODEL,
         messages=messages,
-        max_tokens=20000,
+        max_tokens=10000,
     )
     return response.choices[0].message.content

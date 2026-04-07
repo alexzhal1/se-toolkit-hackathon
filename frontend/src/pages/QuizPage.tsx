@@ -9,8 +9,15 @@ export default function QuizPage() {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [answers, setAnswers] = useState<Record<number, number>>({});
+  const [answers, setAnswers] = useState<Record<number, number[]>>({});
   const [submitted, setSubmitted] = useState(false);
+
+  const arraysEqual = (a: number[], b: number[]) => {
+    if (a.length !== b.length) return false;
+    const sa = [...a].sort((x, y) => x - y);
+    const sb = [...b].sort((x, y) => x - y);
+    return sa.every((v, i) => v === sb[i]);
+  };
 
   useEffect(() => {
     api
@@ -34,9 +41,18 @@ export default function QuizPage() {
     }
   };
 
-  const handleSelect = (questionId: number, optionIndex: number) => {
+  const handleSelect = (questionId: number, optionIndex: number, isMulti: boolean) => {
     if (submitted) return;
-    setAnswers((prev) => ({ ...prev, [questionId]: optionIndex }));
+    setAnswers((prev) => {
+      const current = prev[questionId] || [];
+      if (isMulti) {
+        const next = current.includes(optionIndex)
+          ? current.filter((i) => i !== optionIndex)
+          : [...current, optionIndex];
+        return { ...prev, [questionId]: next };
+      }
+      return { ...prev, [questionId]: [optionIndex] };
+    });
   };
 
   const handleSubmit = () => {
@@ -49,7 +65,7 @@ export default function QuizPage() {
   };
 
   const score = quiz
-    ? quiz.questions.filter((q) => answers[q.id] === q.correct_answer_index).length
+    ? quiz.questions.filter((q) => arraysEqual(answers[q.id] || [], q.correct_answer_indices)).length
     : 0;
 
   if (loading) {
@@ -101,32 +117,44 @@ export default function QuizPage() {
           )}
 
           {quiz.questions.map((q, i) => {
-            const userAnswer = answers[q.id];
-            const isCorrect = userAnswer === q.correct_answer_index;
+            const userAnswer = answers[q.id] || [];
+            const isCorrect = arraysEqual(userAnswer, q.correct_answer_indices);
 
             return (
               <div key={q.id} className="card">
-                <h3 style={{ marginBottom: 12 }}>
+                <h3 style={{ marginBottom: 4 }}>
                   {i + 1}. <Markdown>{q.question_text}</Markdown>
                 </h3>
+                {q.is_multi && (
+                  <p style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>
+                    Multiple answers — select all that apply
+                  </p>
+                )}
 
                 <div className="quiz-options">
                   {q.options.map((opt, idx) => {
+                    const selected = userAnswer.includes(idx);
+                    const isCorrectOpt = q.correct_answer_indices.includes(idx);
                     let className = "quiz-option";
                     if (submitted) {
-                      if (idx === q.correct_answer_index) className += " correct";
-                      else if (idx === userAnswer) className += " wrong";
-                    } else if (userAnswer === idx) {
+                      if (isCorrectOpt) className += " correct";
+                      else if (selected) className += " wrong";
+                    } else if (selected) {
                       className += " selected";
                     }
+                    const marker = q.is_multi
+                      ? selected ? "☑" : "☐"
+                      : selected ? "●" : "○";
                     return (
                       <button
                         key={idx}
                         className={className}
-                        onClick={() => handleSelect(q.id, idx)}
+                        onClick={() => handleSelect(q.id, idx, q.is_multi)}
                         disabled={submitted}
                       >
-                        <span className="quiz-option-letter">{String.fromCharCode(65 + idx)}.</span>
+                        <span className="quiz-option-letter">
+                          {marker} {String.fromCharCode(65 + idx)}.
+                        </span>
                         <span><Markdown>{opt}</Markdown></span>
                       </button>
                     );
@@ -147,7 +175,7 @@ export default function QuizPage() {
             <button
               className="btn btn-primary"
               onClick={handleSubmit}
-              disabled={Object.keys(answers).length !== quiz.questions.length}
+              disabled={quiz.questions.some((q) => !(answers[q.id] && answers[q.id].length > 0))}
               style={{ marginTop: 16 }}
             >
               Submit

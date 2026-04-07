@@ -17,7 +17,8 @@ class QuizQuestionResponse(BaseModel):
     id: int
     question_text: str
     options: list[str]
-    correct_answer_index: int
+    correct_answer_indices: list[int]
+    is_multi: bool
     explanation: str
 
     model_config = {"from_attributes": True}
@@ -71,11 +72,16 @@ async def create_quiz(material_id: int, db: AsyncSession = Depends(get_db)):
     await db.flush()
 
     for q in questions_data:
+        indices = q.get("correct_indices", [])
+        if not isinstance(indices, list):
+            indices = [indices]
+        indices = [int(i) for i in indices]
         question = QuizQuestion(
             quiz_id=quiz.id,
             question_text=q.get("question", ""),
             options=q.get("options", []),
-            correct_answer_index=int(q.get("correct_index", 0)),
+            correct_answer_indices=indices,
+            is_multi=bool(q.get("multi", len(indices) > 1)),
             explanation=q.get("explanation", ""),
         )
         db.add(question)
