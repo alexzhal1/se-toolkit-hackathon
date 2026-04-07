@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models import Material, Quiz, QuizQuestion
+from app.models import Material, Quiz, QuizAttempt, QuizQuestion
 from app.services.ai_service import generate_quiz
 
 router = APIRouter(tags=["quizzes"])
@@ -90,3 +90,46 @@ async def create_quiz(material_id: int, db: AsyncSession = Depends(get_db)):
 
     quiz = await _load_quiz_for_material(material_id, db)
     return quiz
+
+
+class QuizSubmitPayload(BaseModel):
+    user_id: int
+    answers: dict[str, list[int]]  # {question_id: [selected_indices]}
+
+
+class QuizSubmitResponse(BaseModel):
+    score: int
+    total: int
+    attempt_id: int
+
+
+@router.post("/quizzes/{quiz_id}/submit", response_model=QuizSubmitResponse)
+async def submit_quiz(
+    quiz_id: int, payload: QuizSubmitPayload, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(Quiz).where(Quiz.id == quiz_id).options(selectinload(Quiz.questions))
+    )
+    quiz = result.scalar_one_or_none()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+
+    score = 0
+    for q in quiz.questions:
+        user_sel = sorted(payload.answers.get(str(q.id), []))
+        correct = sorted([int(i) for i in q.correct_answer_indices])
+        if user_sel == correct:
+            score += 1
+
+    attempt = QuizAttempt(
+        user_id=payload.user_id,
+        quiz_id=quiz_id,
+        score=score,
+        total=len(quiz.questions),
+        answers=payload.answers,
+    )
+    db.add(attempt)
+    await db.commit()
+    await db.refresh(attempt)
+
+    return QuizSubmitResponse(score=score, total=len(quiz.questions), attempt_id=attempt.id)

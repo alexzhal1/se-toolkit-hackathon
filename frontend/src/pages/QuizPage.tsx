@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { api, Quiz } from "../api/client";
 import Markdown from "../components/Markdown";
 
-export default function QuizPage() {
+export default function QuizPage({ userId }: { userId: number }) {
   const { id } = useParams<{ id: string }>();
   const materialId = parseInt(id || "0");
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -55,8 +55,14 @@ export default function QuizPage() {
     });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!quiz) return;
     setSubmitted(true);
+    try {
+      await api.submitQuiz(quiz.id, userId, answers);
+    } catch (err) {
+      console.error("Failed to record quiz attempt", err);
+    }
   };
 
   const handleReset = () => {

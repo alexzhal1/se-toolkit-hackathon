@@ -8,6 +8,8 @@ import FlashcardsPage from "./pages/FlashcardsPage";
 import ChatPage from "./pages/ChatPage";
 import QuizPage from "./pages/QuizPage";
 import LoginPage from "./pages/LoginPage";
+import ReviewPage from "./pages/ReviewPage";
+import StatsPage from "./pages/StatsPage";
 
 const STORAGE_KEY = "studybot_user";
 
@@ -70,6 +72,12 @@ export default function App() {
           <Link to="/" className="btn btn-secondary">
             Materials
           </Link>
+          <Link to="/review" className="btn btn-secondary">
+            Review
+          </Link>
+          <Link to="/stats" className="btn btn-secondary">
+            Stats
+          </Link>
           <Link to="/upload" className="btn btn-primary">
             + Upload
           </Link>
@@ -88,7 +96,9 @@ export default function App() {
         <Route path="/materials/:id" element={<MaterialPage />} />
         <Route path="/materials/:id/flashcards" element={<FlashcardsPage />} />
         <Route path="/materials/:id/chat" element={<ChatPage />} />
-        <Route path="/materials/:id/quiz" element={<QuizPage />} />
+        <Route path="/materials/:id/quiz" element={<QuizPage userId={user.id} />} />
+        <Route path="/review" element={<ReviewPage userId={user.id} />} />
+        <Route path="/stats" element={<StatsPage userId={user.id} />} />
       </Routes>
     </div>
   );

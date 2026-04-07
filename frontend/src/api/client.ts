@@ -144,4 +144,54 @@ export const api = {
   generateQuiz(materialId: number): Promise<Quiz> {
     return request(`/materials/${materialId}/quiz`, { method: "POST" });
   },
+
+  submitQuiz(
+    quizId: number,
+    userId: number,
+    answers: Record<number, number[]>
+  ): Promise<{ score: number; total: number; attempt_id: number }> {
+    return request(`/quizzes/${quizId}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId, answers }),
+    });
+  },
+
+  getReviewQueue(userId: number): Promise<ReviewFlashcard[]> {
+    return request(`/flashcards/review?user_id=${userId}`);
+  },
+
+  reviewFlashcard(cardId: number, quality: number): Promise<Flashcard> {
+    return request(`/flashcards/${cardId}/review`, {
+      method: "POST",
+      body: JSON.stringify({ quality }),
+    });
+  },
+
+  getStats(userId: number): Promise<UserStats> {
+    return request(`/users/${userId}/stats`);
+  },
 };
+
+export interface ReviewFlashcard extends Flashcard {
+  material_title: string;
+  ease_factor: number;
+  interval_days: number;
+  repetitions: number;
+}
+
+export interface QuizAttemptSummary {
+  quiz_id: number;
+  score: number;
+  total: number;
+  completed_at: string;
+}
+
+export interface UserStats {
+  materials_count: number;
+  flashcards_count: number;
+  flashcards_due: number;
+  flashcards_learned: number;
+  quiz_attempts: number;
+  quiz_avg_pct: number;
+  recent_attempts: QuizAttemptSummary[];
+}
