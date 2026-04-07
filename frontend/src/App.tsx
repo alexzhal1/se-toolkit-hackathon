@@ -6,6 +6,10 @@ import UploadPage from "./pages/UploadPage";
 import MaterialPage from "./pages/MaterialPage";
 import FlashcardsPage from "./pages/FlashcardsPage";
 import ChatPage from "./pages/ChatPage";
+import QuizPage from "./pages/QuizPage";
+import LoginPage from "./pages/LoginPage";
+
+const STORAGE_KEY = "studybot_user";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -13,20 +17,28 @@ export default function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Simple auth: use a stored or generated user ID
-    const storedId = localStorage.getItem("studybot_telegram_id");
-    const telegramId = storedId ? parseInt(storedId) : Math.floor(Math.random() * 1_000_000_000);
-
-    if (!storedId) {
-      localStorage.setItem("studybot_telegram_id", String(telegramId));
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        setUser(JSON.parse(stored));
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+      }
     }
-
-    api
-      .auth(telegramId, "Student")
-      .then(setUser)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    setLoading(false);
   }, []);
+
+  const handleLogin = (u: User) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+    setUser(u);
+    navigate("/");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setUser(null);
+    navigate("/");
+  };
 
   if (loading) {
     return (
@@ -40,7 +52,10 @@ export default function App() {
   if (!user) {
     return (
       <div className="container">
-        <p>Failed to connect. Please refresh the page.</p>
+        <header className="header">
+          <h1>StudyBot</h1>
+        </header>
+        <LoginPage onLogin={handleLogin} />
       </div>
     );
   }
@@ -58,6 +73,9 @@ export default function App() {
           <Link to="/upload" className="btn btn-primary">
             + Upload
           </Link>
+          <button className="btn btn-secondary" onClick={handleLogout}>
+            Logout
+          </button>
         </nav>
       </header>
 
@@ -70,6 +88,7 @@ export default function App() {
         <Route path="/materials/:id" element={<MaterialPage />} />
         <Route path="/materials/:id/flashcards" element={<FlashcardsPage />} />
         <Route path="/materials/:id/chat" element={<ChatPage />} />
+        <Route path="/materials/:id/quiz" element={<QuizPage />} />
       </Routes>
     </div>
   );

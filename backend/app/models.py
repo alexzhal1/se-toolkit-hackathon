@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Text, func
+from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Integer, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -55,3 +55,40 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     material: Mapped["Material"] = relationship(back_populates="chat_messages")
+
+
+class Quiz(Base):
+    __tablename__ = "quizzes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(default="Quiz")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    questions: Mapped[list["QuizQuestion"]] = relationship(
+        back_populates="quiz", cascade="all, delete-orphan", order_by="QuizQuestion.id"
+    )
+
+
+class QuizQuestion(Base):
+    __tablename__ = "quiz_questions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    quiz_id: Mapped[int] = mapped_column(ForeignKey("quizzes.id", ondelete="CASCADE"))
+    question_text: Mapped[str] = mapped_column(Text)
+    options: Mapped[list] = mapped_column(JSON)  # list of 4 strings
+    correct_answer_index: Mapped[int] = mapped_column(Integer)
+    explanation: Mapped[str] = mapped_column(Text, default="")
+
+    quiz: Mapped["Quiz"] = relationship(back_populates="questions")
+
+
+class LoginToken(Base):
+    """One-time login token issued by the Telegram bot."""
+    __tablename__ = "login_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    used: Mapped[bool] = mapped_column(default=False)

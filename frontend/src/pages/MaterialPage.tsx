@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
 import { api, Material } from "../api/client";
+import Markdown from "../components/Markdown";
 
 export default function MaterialPage() {
   const { id } = useParams<{ id: string }>();
@@ -93,6 +93,10 @@ export default function MaterialPage() {
           Ask AI
         </Link>
 
+        <Link to={`/materials/${material.id}/quiz`} className="btn btn-secondary">
+          Quiz
+        </Link>
+
         <button className="btn btn-danger" onClick={handleDelete} disabled={deleting}>
           {deleting ? "Deleting..." : "Delete"}
         </button>
@@ -102,7 +106,7 @@ export default function MaterialPage() {
         <div style={{ marginTop: 24 }}>
           <h3 style={{ marginBottom: 8 }}>AI Explanation</h3>
           <div className="explanation">
-            <ReactMarkdown>{material.explanation}</ReactMarkdown>
+            <Markdown>{material.explanation}</Markdown>
           </div>
         </div>
       )}

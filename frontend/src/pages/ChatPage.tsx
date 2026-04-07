@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
 import { api, ChatMessage } from "../api/client";
+import Markdown from "../components/Markdown";
 
 export default function ChatPage() {
   const { id } = useParams<{ id: string }>();
@@ -97,7 +97,7 @@ export default function ChatPage() {
         {messages.map((msg) => (
           <div key={msg.id} className={`chat-bubble ${msg.role}`}>
             {msg.role === "assistant" ? (
-              <ReactMarkdown>{msg.content}</ReactMarkdown>
+              <Markdown>{msg.content}</Markdown>
             ) : (
               msg.content
             )}

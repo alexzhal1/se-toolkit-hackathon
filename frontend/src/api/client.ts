@@ -42,11 +42,34 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface QuizQuestion {
+  id: number;
+  question_text: string;
+  options: string[];
+  correct_answer_index: number;
+  explanation: string;
+}
+
+export interface Quiz {
+  id: number;
+  material_id: number;
+  title: string;
+  created_at: string;
+  questions: QuizQuestion[];
+}
+
 export const api = {
   auth(telegram_id: number, first_name: string): Promise<User> {
     return request("/auth", {
       method: "POST",
       body: JSON.stringify({ telegram_id, first_name }),
+    });
+  },
+
+  loginWithToken(token: string): Promise<User> {
+    return request("/auth/telegram", {
+      method: "POST",
+      body: JSON.stringify({ token }),
     });
   },
 
@@ -111,5 +134,13 @@ export const api = {
 
   clearChat(materialId: number): Promise<void> {
     return request(`/materials/${materialId}/chat`, { method: "DELETE" });
+  },
+
+  getQuiz(materialId: number): Promise<Quiz | null> {
+    return request(`/materials/${materialId}/quiz`);
+  },
+
+  generateQuiz(materialId: number): Promise<Quiz> {
+    return request(`/materials/${materialId}/quiz`, { method: "POST" });
   },
 };

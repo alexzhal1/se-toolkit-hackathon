@@ -81,6 +81,54 @@ async def generate_flashcards(content: str, explanation: str | None = None) -> l
     return cards
 
 
+def _strip_code_fences(raw: str) -> str:
+    raw = raw.strip()
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        raw = "\n".join(lines)
+    return raw
+
+
+async def generate_quiz(content: str, explanation: str | None = None) -> list[dict]:
+    """Generate a multiple-choice quiz from the study material."""
+    context = content
+    if explanation:
+        context += f"\n\nExplanation:\n{explanation}"
+
+    response = await client.chat.completions.create(
+        model=MODEL,
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "You are an expert tutor creating a multiple-choice quiz. "
+                    "Generate exactly 10 questions from the provided material. "
+                    "Each question must have 4 options and exactly one correct answer. "
+                    "Provide a brief explanation of why the correct answer is right. "
+                    "All content must be in English. "
+                    "Return ONLY a JSON array with no extra text, in this format:\n"
+                    '[{"question": "...", "options": ["A", "B", "C", "D"], '
+                    '"correct_index": 0, "explanation": "..."}, ...]\n\n'
+                    f"Material:\n\n{context}"
+                ),
+            },
+        ],
+        max_tokens=20000,
+    )
+
+    raw = _strip_code_fences(response.choices[0].message.content)
+    try:
+        questions = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.error("Failed to parse quiz JSON: %s", raw[:200])
+        questions = []
+
+    return questions
+
+
 async def chat_with_context(
     material_content: str,
     material_explanation: str | None,
