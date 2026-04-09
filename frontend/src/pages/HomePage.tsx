@@ -2,17 +2,17 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, Material } from "../api/client";
 
-export default function HomePage({ userId }: { userId: number }) {
+export default function HomePage() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
-      .getMaterials(userId)
+      .getMaterials()
       .then(setMaterials)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, []);
 
   if (loading) {
     return (

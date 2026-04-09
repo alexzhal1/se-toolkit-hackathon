@@ -1,19 +1,32 @@
 import { useState } from "react";
 import { api, User } from "../api/client";
 
-export default function LoginPage({ onLogin }: { onLogin: (user: User) => void }) {
-  const [token, setToken] = useState("");
+type Mode = "login" | "register";
+
+export default function LoginPage({
+  onLogin,
+}: {
+  onLogin: (user: User, token: string) => void;
+}) {
+  const [mode, setMode] = useState<Mode>("login");
+  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token.trim()) return;
     setLoading(true);
     setError("");
     try {
-      const user = await api.loginWithToken(token.trim());
-      onLogin(user);
+      if (mode === "register") {
+        const res = await api.register(email.trim(), login.trim(), password);
+        onLogin(res.user, res.token);
+      } else {
+        const res = await api.login(login.trim(), password);
+        onLogin(res.user, res.token);
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -23,32 +36,83 @@ export default function LoginPage({ onLogin }: { onLogin: (user: User) => void }
 
   return (
     <div style={{ maxWidth: 480, margin: "60px auto" }}>
-      <h2 style={{ marginBottom: 8 }}>Log in with Telegram</h2>
-      <p style={{ color: "#94a3b8", marginBottom: 24, lineHeight: 1.6 }}>
-        1. Open the StudyBot Telegram bot and send <code style={{ background: "#1e293b", padding: "2px 6px", borderRadius: 4 }}>/login</code>
-        <br />
-        2. Copy the code the bot gives you
-        <br />
-        3. Paste it below
-      </p>
+      <h2 style={{ marginBottom: 24 }}>
+        {mode === "login" ? "Log In" : "Sign Up"}
+      </h2>
+
+      {/* Toggle */}
+      <div style={{ marginBottom: 24, display: "flex", gap: 8 }}>
+        <button
+          className={`btn ${mode === "login" ? "btn-primary" : "btn-secondary"}`}
+          onClick={() => {
+            setMode("login");
+            setError("");
+          }}
+          type="button"
+        >
+          Log In
+        </button>
+        <button
+          className={`btn ${mode === "register" ? "btn-primary" : "btn-secondary"}`}
+          onClick={() => {
+            setMode("register");
+            setError("");
+          }}
+          type="button"
+        >
+          Sign Up
+        </button>
+      </div>
 
       <form onSubmit={handleSubmit}>
+        {mode === "register" && (
+          <div className="form-group">
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+        )}
+
         <div className="form-group">
-          <label htmlFor="token">Login code</label>
+          <label htmlFor="login">{mode === "register" ? "Username" : "Username or Email"}</label>
           <input
-            id="token"
+            id="login"
             type="text"
-            placeholder="Paste your code here"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            autoFocus
+            placeholder={mode === "register" ? "username" : "username or email"}
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
+            required
+            autoFocus={mode !== "register"}
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
           />
         </div>
 
         {error && <p style={{ color: "#ef4444", marginBottom: 12 }}>{error}</p>}
 
-        <button type="submit" className="btn btn-primary" disabled={loading || !token.trim()}>
-          {loading ? "Logging in..." : "Log in"}
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={loading || (mode === "register" && !email.trim()) || !login.trim() || !password.trim()}
+        >
+          {loading ? (mode === "login" ? "Logging in..." : "Creating account...") : (mode === "login" ? "Log In" : "Sign Up")}
         </button>
       </form>
     </div>

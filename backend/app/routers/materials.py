@@ -1,4 +1,3 @@
-import io
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
@@ -7,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Material
+from app.dependencies import get_current_user
+from app.models import Material, User
 from app.services.ai_service import explain_material
 from app.services.file_parser import extract_text_from_file
 
@@ -15,7 +15,6 @@ router = APIRouter(tags=["materials"])
 
 
 class MaterialCreate(BaseModel):
-    user_id: int
     title: str = "Untitled"
     content: str
 
@@ -32,16 +31,25 @@ class MaterialResponse(BaseModel):
 
 
 @router.get("/materials", response_model=list[MaterialResponse])
-async def list_materials(user_id: int, db: AsyncSession = Depends(get_db)):
+async def list_materials(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     result = await db.execute(
-        select(Material).where(Material.user_id == user_id).order_by(Material.created_at.desc())
+        select(Material)
+        .where(Material.user_id == current_user.id)
+        .order_by(Material.created_at.desc())
     )
     return result.scalars().all()
 
 
 @router.post("/materials", response_model=MaterialResponse)
-async def create_material(data: MaterialCreate, db: AsyncSession = Depends(get_db)):
-    material = Material(user_id=data.user_id, title=data.title, content=data.content)
+async def create_material(
+    data: MaterialCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    material = Material(user_id=current_user.id, title=data.title, content=data.content)
     db.add(material)
     await db.commit()
     await db.refresh(material)
@@ -50,10 +58,10 @@ async def create_material(data: MaterialCreate, db: AsyncSession = Depends(get_d
 
 @router.post("/materials/upload", response_model=MaterialResponse)
 async def upload_file(
-    user_id: int = Form(...),
     title: str = Form(""),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Upload a .pdf or .docx file and extract text as material."""
     if not file.filename:
@@ -73,7 +81,7 @@ async def upload_file(
         raise HTTPException(status_code=400, detail="Could not extract text from file")
 
     material_title = title or file.filename.rsplit(".", 1)[0]
-    material = Material(user_id=user_id, title=material_title, content=content)
+    material = Material(user_id=current_user.id, title=material_title, content=content)
     db.add(material)
     await db.commit()
     await db.refresh(material)
@@ -81,8 +89,14 @@ async def upload_file(
 
 
 @router.get("/materials/{material_id}", response_model=MaterialResponse)
-async def get_material(material_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Material).where(Material.id == material_id))
+async def get_material(
+    material_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Material).where(Material.id == material_id, Material.user_id == current_user.id)
+    )
     material = result.scalar_one_or_none()
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
@@ -90,8 +104,16 @@ async def get_material(material_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/materials/{material_id}/explain", response_model=MaterialResponse)
-async def explain(material_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Material).where(Material.id == material_id))
+async def explain(
+    material_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Material).where(
+            Material.id == material_id, Material.user_id == current_user.id
+        )
+    )
     material = result.scalar_one_or_none()
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
@@ -104,8 +126,16 @@ async def explain(material_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/materials/{material_id}")
-async def delete_material(material_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Material).where(Material.id == material_id))
+async def delete_material(
+    material_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Material).where(
+            Material.id == material_id, Material.user_id == current_user.id
+        )
+    )
     material = result.scalar_one_or_none()
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")

@@ -6,7 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Flashcard, Material
+from app.dependencies import get_current_user
+from app.models import Flashcard, Material, User
 from app.services.ai_service import generate_flashcards
 
 router = APIRouter(tags=["flashcards"])
@@ -33,14 +34,31 @@ class ReviewSubmit(BaseModel):
 
 
 @router.get("/materials/{material_id}/flashcards", response_model=list[FlashcardResponse])
-async def get_flashcards(material_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Flashcard).where(Flashcard.material_id == material_id))
-    return result.scalars().all()
+async def get_flashcards(
+    material_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Flashcard, Material)
+        .join(Material, Material.id == Flashcard.material_id)
+        .where(Flashcard.material_id == material_id, Material.user_id == current_user.id)
+    )
+    rows = result.all()
+    return [card for card, _ in rows]
 
 
 @router.post("/materials/{material_id}/flashcards", response_model=list[FlashcardResponse])
-async def create_flashcards(material_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Material).where(Material.id == material_id))
+async def create_flashcards(
+    material_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Material).where(
+            Material.id == material_id, Material.user_id == current_user.id
+        )
+    )
     material = result.scalar_one_or_none()
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
@@ -70,13 +88,17 @@ async def create_flashcards(material_id: int, db: AsyncSession = Depends(get_db)
 
 
 @router.get("/flashcards/review", response_model=list[ReviewFlashcardResponse])
-async def get_review_queue(user_id: int, limit: int = 30, db: AsyncSession = Depends(get_db)):
+async def get_review_queue(
+    limit: int = 30,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Return flashcards owned by user that are due for review (SM-2)."""
     now = datetime.now(timezone.utc)
     result = await db.execute(
         select(Flashcard, Material.title)
         .join(Material, Material.id == Flashcard.material_id)
-        .where(Material.user_id == user_id, Flashcard.next_review_at <= now)
+        .where(Material.user_id == current_user.id, Flashcard.next_review_at <= now)
         .order_by(Flashcard.next_review_at.asc())
         .limit(limit)
     )
@@ -98,7 +120,10 @@ async def get_review_queue(user_id: int, limit: int = 30, db: AsyncSession = Dep
 
 @router.post("/flashcards/{card_id}/review", response_model=FlashcardResponse)
 async def submit_review(
-    card_id: int, payload: ReviewSubmit, db: AsyncSession = Depends(get_db)
+    card_id: int,
+    payload: ReviewSubmit,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Apply SM-2 algorithm to update card scheduling.
 
@@ -106,7 +131,11 @@ async def submit_review(
       0..2 — failed (reset repetitions, review again tomorrow)
       3..5 — passed (advance interval)
     """
-    result = await db.execute(select(Flashcard).where(Flashcard.id == card_id))
+    result = await db.execute(
+        select(Flashcard)
+        .join(Material, Material.id == Flashcard.material_id)
+        .where(Flashcard.id == card_id, Material.user_id == current_user.id)
+    )
     card = result.scalar_one_or_none()
     if not card:
         raise HTTPException(status_code=404, detail="Flashcard not found")
@@ -141,11 +170,14 @@ class ReviewStatsResponse(BaseModel):
 
 
 @router.get("/flashcards/review/stats", response_model=ReviewStatsResponse)
-async def review_stats(user_id: int, db: AsyncSession = Depends(get_db)):
+async def review_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     now = datetime.now(timezone.utc)
-    base = select(func.count(Flashcard.id)).join(Material, Material.id == Flashcard.material_id).where(
-        Material.user_id == user_id
-    )
+    base = select(func.count(Flashcard.id)).join(
+        Material, Material.id == Flashcard.material_id
+    ).where(Material.user_id == current_user.id)
     total = (await db.execute(base)).scalar_one()
     due = (await db.execute(base.where(Flashcard.next_review_at <= now))).scalar_one()
     learned = (await db.execute(base.where(Flashcard.repetitions >= 2))).scalar_one()

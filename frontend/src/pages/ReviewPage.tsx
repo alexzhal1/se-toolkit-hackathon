@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, ReviewFlashcard } from "../api/client";
 import Markdown from "../components/Markdown";
 
-export default function ReviewPage({ userId }: { userId: number }) {
+export default function ReviewPage() {
   const [queue, setQueue] = useState<ReviewFlashcard[]>([]);
   const [loading, setLoading] = useState(true);
   const [flipped, setFlipped] = useState(false);
@@ -13,7 +13,7 @@ export default function ReviewPage({ userId }: { userId: number }) {
   const load = () => {
     setLoading(true);
     api
-      .getReviewQueue(userId)
+      .getReviewQueue()
       .then((q) => {
         setQueue(q);
         setFlipped(false);
@@ -22,7 +22,7 @@ export default function ReviewPage({ userId }: { userId: number }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [userId]);
+  useEffect(load, []);
 
   const current = queue[0];
 

@@ -2,11 +2,10 @@ import { useState, useRef } from "react";
 import { api } from "../api/client";
 
 interface Props {
-  userId: number;
   onCreated: () => void;
 }
 
-export default function UploadPage({ userId, onCreated }: Props) {
+export default function UploadPage({ onCreated }: Props) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -26,9 +25,9 @@ export default function UploadPage({ userId, onCreated }: Props) {
     setError("");
     try {
       if (file) {
-        await api.uploadFile(userId, title, file);
+        await api.uploadFile(title, file);
       } else {
-        await api.createMaterial(userId, title || content.substring(0, 50), content);
+        await api.createMaterial(title || content.substring(0, 50), content);
       }
       onCreated();
     } catch (err: any) {
