@@ -8,6 +8,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 revision: str = "006"
 down_revision: Union[str, None] = "005"
@@ -16,20 +17,37 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Drop login_tokens table
-    op.drop_table("login_tokens")
+    bind = op.get_bind()
+    inspector = inspect(bind)
 
-    # Remove telegram-related columns
-    op.drop_index("ix_users_telegram_id", table_name="users")
-    op.drop_constraint("uq_users_telegram_id", table_name="users", type_="unique")
-    op.drop_column("users", "telegram_id")
-    op.drop_column("users", "username")
-    op.drop_column("users", "first_name")
+    # Drop login_tokens table if exists
+    if "login_tokens" in inspector.get_table_names():
+        op.drop_table("login_tokens")
 
-    # Add new auth columns
-    op.add_column("users", sa.Column("email", sa.String(255), nullable=False, server_default=""))
-    op.add_column("users", sa.Column("login", sa.String(80), nullable=False, server_default=""))
-    op.add_column("users", sa.Column("hashed_password", sa.String(255), nullable=False, server_default=""))
+    columns = [col["name"] for col in inspector.get_columns("users")]
+    indexes = [idx["name"] for idx in inspector.get_indexes("users")]
+    unique_constraints = [uc["name"] for uc in inspector.get_unique_constraints("users")]
+
+    # Remove telegram-related columns (if they exist)
+    if "ix_users_telegram_id" in indexes:
+        op.drop_index("ix_users_telegram_id", table_name="users")
+    if "uq_users_telegram_id" in unique_constraints:
+        op.drop_constraint("uq_users_telegram_id", table_name="users", type_="unique")
+
+    if "telegram_id" in columns:
+        op.drop_column("users", "telegram_id")
+    if "username" in columns:
+        op.drop_column("users", "username")
+    if "first_name" in columns:
+        op.drop_column("users", "first_name")
+
+    # Add new auth columns (if they don't exist)
+    if "email" not in columns:
+        op.add_column("users", sa.Column("email", sa.String(255), nullable=False, server_default=""))
+    if "login" not in columns:
+        op.add_column("users", sa.Column("login", sa.String(80), nullable=False, server_default=""))
+    if "hashed_password" not in columns:
+        op.add_column("users", sa.Column("hashed_password", sa.String(255), nullable=False, server_default=""))
 
     # Create unique indexes
     op.create_unique_constraint("uq_users_email", "users", ["email"])
@@ -42,7 +60,7 @@ def downgrade() -> None:
     op.drop_index("ix_users_login", table_name="users")
     op.drop_index("ix_users_email", table_name="users")
     op.drop_constraint("uq_users_login", table_name="users", type_="unique")
-    op.drop_constraint("uq_users_email", table_name="users", type_="unique")
+    op.drop_constraint("uq_users_email", "users", type_="unique")
 
     op.drop_column("users", "hashed_password")
     op.drop_column("users", "login")
@@ -54,7 +72,6 @@ def downgrade() -> None:
     op.create_unique_constraint("uq_users_telegram_id", "users", ["telegram_id"])
     op.create_index("ix_users_telegram_id", "users", ["telegram_id"])
 
-    # Recreate login_tokens table
     op.create_table(
         "login_tokens",
         sa.Column("id", sa.Integer(), primary_key=True),
