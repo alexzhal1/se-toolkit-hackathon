@@ -6,7 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import Flashcard, Material, QuizAttempt
+from app.dependencies import get_current_user
+from app.models import Flashcard, Material, QuizAttempt, User
 
 router = APIRouter(tags=["stats"])
 
@@ -28,9 +29,13 @@ class StatsResponse(BaseModel):
     recent_attempts: list[RecentAttempt]
 
 
-@router.get("/users/{user_id}/stats", response_model=StatsResponse)
-async def get_user_stats(user_id: int, db: AsyncSession = Depends(get_db)):
+@router.get("/users/me/stats", response_model=StatsResponse)
+async def get_user_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     now = datetime.now(timezone.utc)
+    user_id = current_user.id
 
     materials_count = (
         await db.execute(select(func.count(Material.id)).where(Material.user_id == user_id))

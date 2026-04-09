@@ -1,22 +1,15 @@
 const API_BASE = "/api";
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || "Request failed");
-  }
-  return res.json();
-}
-
 export interface User {
   id: number;
-  telegram_id: number;
-  username: string | null;
-  first_name: string;
+  email: string;
+  login: string;
+  created_at: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  token: string;
 }
 
 export interface Material {
@@ -59,33 +52,55 @@ export interface Quiz {
   questions: QuizQuestion[];
 }
 
+function getToken(): string | null {
+  return localStorage.getItem("studybot_token");
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers,
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || "Request failed");
+  }
+  return res.json();
+}
+
 export const api = {
-  auth(telegram_id: number, first_name: string): Promise<User> {
-    return request("/auth", {
+  register(email: string, login: string, password: string): Promise<AuthResponse> {
+    return request("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ telegram_id, first_name }),
+      body: JSON.stringify({ email, login, password }),
     });
   },
 
-  loginWithToken(token: string): Promise<User> {
-    return request("/auth/telegram", {
+  login(login: string, password: string): Promise<AuthResponse> {
+    return request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ login, password }),
     });
   },
 
-  getMaterials(userId: number): Promise<Material[]> {
-    return request(`/materials?user_id=${userId}`);
+  getMaterials(): Promise<Material[]> {
+    return request("/materials");
   },
 
   getMaterial(id: number): Promise<Material> {
     return request(`/materials/${id}`);
   },
 
-  createMaterial(userId: number, title: string, content: string): Promise<Material> {
+  createMaterial(title: string, content: string): Promise<Material> {
     return request("/materials", {
       method: "POST",
-      body: JSON.stringify({ user_id: userId, title, content }),
+      body: JSON.stringify({ title, content }),
     });
   },
 
@@ -105,13 +120,18 @@ export const api = {
     return request(`/materials/${materialId}/flashcards`, { method: "POST" });
   },
 
-  uploadFile(userId: number, title: string, file: File): Promise<Material> {
+  uploadFile(title: string, file: File): Promise<Material> {
     const formData = new FormData();
-    formData.append("user_id", String(userId));
     formData.append("title", title);
     formData.append("file", file);
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
     return fetch(`${API_BASE}/materials/upload`, {
       method: "POST",
+      headers,
       body: formData,
     }).then(async (res) => {
       if (!res.ok) {
@@ -147,17 +167,16 @@ export const api = {
 
   submitQuiz(
     quizId: number,
-    userId: number,
     answers: Record<number, number[]>
   ): Promise<{ score: number; total: number; attempt_id: number }> {
     return request(`/quizzes/${quizId}/submit`, {
       method: "POST",
-      body: JSON.stringify({ user_id: userId, answers }),
+      body: JSON.stringify({ answers }),
     });
   },
 
-  getReviewQueue(userId: number): Promise<ReviewFlashcard[]> {
-    return request(`/flashcards/review?user_id=${userId}`);
+  getReviewQueue(): Promise<ReviewFlashcard[]> {
+    return request("/flashcards/review");
   },
 
   reviewFlashcard(cardId: number, quality: number): Promise<Flashcard> {
@@ -167,8 +186,8 @@ export const api = {
     });
   },
 
-  getStats(userId: number): Promise<UserStats> {
-    return request(`/users/${userId}/stats`);
+  getStats(): Promise<UserStats> {
+    return request("/users/me/stats");
   },
 };
 

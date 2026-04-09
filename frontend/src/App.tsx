@@ -11,7 +11,28 @@ import LoginPage from "./pages/LoginPage";
 import ReviewPage from "./pages/ReviewPage";
 import StatsPage from "./pages/StatsPage";
 
-const STORAGE_KEY = "studybot_user";
+const USER_KEY = "studybot_user";
+const TOKEN_KEY = "studybot_token";
+
+function getStoredUser(): User | null {
+  const stored = localStorage.getItem(USER_KEY);
+  if (!stored) return null;
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return null;
+  }
+}
+
+function setAuth(user: User, token: string) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+function clearAuth() {
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -19,25 +40,18 @@ export default function App() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
+    setUser(getStoredUser());
     setLoading(false);
   }, []);
 
-  const handleLogin = (u: User) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+  const handleLogin = (u: User, token: string) => {
+    setAuth(u, token);
     setUser(u);
     navigate("/");
   };
 
   const handleLogout = () => {
-    localStorage.removeItem(STORAGE_KEY);
+    clearAuth();
     setUser(null);
     navigate("/");
   };
@@ -88,17 +102,17 @@ export default function App() {
       </header>
 
       <Routes>
-        <Route path="/" element={<HomePage userId={user.id} />} />
+        <Route path="/" element={<HomePage />} />
         <Route
           path="/upload"
-          element={<UploadPage userId={user.id} onCreated={() => navigate("/")} />}
+          element={<UploadPage onCreated={() => navigate("/")} />}
         />
         <Route path="/materials/:id" element={<MaterialPage />} />
         <Route path="/materials/:id/flashcards" element={<FlashcardsPage />} />
         <Route path="/materials/:id/chat" element={<ChatPage />} />
-        <Route path="/materials/:id/quiz" element={<QuizPage userId={user.id} />} />
-        <Route path="/review" element={<ReviewPage userId={user.id} />} />
-        <Route path="/stats" element={<StatsPage userId={user.id} />} />
+        <Route path="/materials/:id/quiz" element={<QuizPage />} />
+        <Route path="/review" element={<ReviewPage />} />
+        <Route path="/stats" element={<StatsPage />} />
       </Routes>
     </div>
   );

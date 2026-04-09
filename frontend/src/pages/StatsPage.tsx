@@ -2,17 +2,17 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, UserStats } from "../api/client";
 
-export default function StatsPage({ userId }: { userId: number }) {
+export default function StatsPage() {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
-      .getStats(userId)
+      .getStats()
       .then(setStats)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, []);
 
   if (loading) {
     return (

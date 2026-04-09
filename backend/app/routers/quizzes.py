@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models import Material, Quiz, QuizAttempt, QuizQuestion
+from app.dependencies import get_current_user
+from app.models import Material, Quiz, QuizAttempt, QuizQuestion, User
 from app.services.ai_service import generate_quiz
 
 router = APIRouter(tags=["quizzes"])
@@ -34,10 +35,13 @@ class QuizResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-async def _load_quiz_for_material(material_id: int, db: AsyncSession) -> Quiz | None:
+async def _load_quiz_for_material(
+    material_id: int, user_id: int, db: AsyncSession
+) -> Quiz | None:
     result = await db.execute(
         select(Quiz)
-        .where(Quiz.material_id == material_id)
+        .join(Material, Material.id == Quiz.material_id)
+        .where(Quiz.material_id == material_id, Material.user_id == user_id)
         .options(selectinload(Quiz.questions))
         .order_by(Quiz.created_at.desc())
     )
@@ -45,14 +49,26 @@ async def _load_quiz_for_material(material_id: int, db: AsyncSession) -> Quiz | 
 
 
 @router.get("/materials/{material_id}/quiz", response_model=QuizResponse | None)
-async def get_quiz(material_id: int, db: AsyncSession = Depends(get_db)):
-    quiz = await _load_quiz_for_material(material_id, db)
+async def get_quiz(
+    material_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    quiz = await _load_quiz_for_material(material_id, current_user.id, db)
     return quiz
 
 
 @router.post("/materials/{material_id}/quiz", response_model=QuizResponse)
-async def create_quiz(material_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Material).where(Material.id == material_id))
+async def create_quiz(
+    material_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Material).where(
+            Material.id == material_id, Material.user_id == current_user.id
+        )
+    )
     material = result.scalar_one_or_none()
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
@@ -88,12 +104,11 @@ async def create_quiz(material_id: int, db: AsyncSession = Depends(get_db)):
 
     await db.commit()
 
-    quiz = await _load_quiz_for_material(material_id, db)
+    quiz = await _load_quiz_for_material(material_id, current_user.id, db)
     return quiz
 
 
 class QuizSubmitPayload(BaseModel):
-    user_id: int
     answers: dict[str, list[int]]  # {question_id: [selected_indices]}
 
 
@@ -105,10 +120,16 @@ class QuizSubmitResponse(BaseModel):
 
 @router.post("/quizzes/{quiz_id}/submit", response_model=QuizSubmitResponse)
 async def submit_quiz(
-    quiz_id: int, payload: QuizSubmitPayload, db: AsyncSession = Depends(get_db)
+    quiz_id: int,
+    payload: QuizSubmitPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     result = await db.execute(
-        select(Quiz).where(Quiz.id == quiz_id).options(selectinload(Quiz.questions))
+        select(Quiz)
+        .join(Material, Material.id == Quiz.material_id)
+        .where(Quiz.id == quiz_id, Material.user_id == current_user.id)
+        .options(selectinload(Quiz.questions))
     )
     quiz = result.scalar_one_or_none()
     if not quiz:
@@ -122,7 +143,7 @@ async def submit_quiz(
             score += 1
 
     attempt = QuizAttempt(
-        user_id=payload.user_id,
+        user_id=current_user.id,
         quiz_id=quiz_id,
         score=score,
         total=len(quiz.questions),

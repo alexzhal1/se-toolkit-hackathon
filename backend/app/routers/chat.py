@@ -4,7 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import ChatMessage, Material
+from app.dependencies import get_current_user
+from app.models import ChatMessage, Material, User
 from app.services.ai_service import chat_with_context
 
 router = APIRouter(tags=["chat"])
@@ -24,13 +25,18 @@ class ChatMessageResponse(BaseModel):
 
 
 @router.get("/materials/{material_id}/chat", response_model=list[ChatMessageResponse])
-async def get_chat_history(material_id: int, db: AsyncSession = Depends(get_db)):
+async def get_chat_history(
+    material_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     result = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.material_id == material_id)
+        select(ChatMessage, Material)
+        .join(Material, Material.id == ChatMessage.material_id)
+        .where(ChatMessage.material_id == material_id, Material.user_id == current_user.id)
         .order_by(ChatMessage.created_at)
     )
-    return result.scalars().all()
+    return [msg for msg, _ in result.all()]
 
 
 @router.post("/materials/{material_id}/chat", response_model=ChatMessageResponse)
@@ -38,9 +44,14 @@ async def send_message(
     material_id: int,
     data: ChatRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    # Get material
-    result = await db.execute(select(Material).where(Material.id == material_id))
+    # Get material (ensure user owns it)
+    result = await db.execute(
+        select(Material).where(
+            Material.id == material_id, Material.user_id == current_user.id
+        )
+    )
     material = result.scalar_one_or_none()
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
@@ -76,11 +87,17 @@ async def send_message(
 
 
 @router.delete("/materials/{material_id}/chat")
-async def clear_chat(material_id: int, db: AsyncSession = Depends(get_db)):
+async def clear_chat(
+    material_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     result = await db.execute(
-        select(ChatMessage).where(ChatMessage.material_id == material_id)
+        select(ChatMessage, Material)
+        .join(Material, Material.id == ChatMessage.material_id)
+        .where(ChatMessage.material_id == material_id, Material.user_id == current_user.id)
     )
-    for msg in result.scalars().all():
+    for msg, _ in result.all():
         await db.delete(msg)
     await db.commit()
     return {"ok": True}

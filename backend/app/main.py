@@ -9,16 +9,7 @@ from app.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Start the Telegram bot in the background
-    from app.bot.bot import start_bot
-
-    bot_task = asyncio.create_task(start_bot())
     yield
-    bot_task.cancel()
-    try:
-        await bot_task
-    except asyncio.CancelledError:
-        pass
 
 
 app = FastAPI(title="StudyBot API", version="1.0.0", lifespan=lifespan)
