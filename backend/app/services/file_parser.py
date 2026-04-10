@@ -4,10 +4,24 @@ import io
 def extract_text_from_file(file_bytes: bytes, ext: str) -> str:
     """Extract text content from PDF or DOCX files."""
     if ext == "pdf":
-        return _parse_pdf(file_bytes)
+        text = _parse_pdf(file_bytes)
     elif ext == "docx":
-        return _parse_docx(file_bytes)
-    raise ValueError(f"Unsupported file type: .{ext}")
+        text = _parse_docx(file_bytes)
+    else:
+        raise ValueError(f"Unsupported file type: .{ext}")
+    return _sanitize(text)
+
+
+def _sanitize(text: str) -> str:
+    """Strip NUL bytes (PostgreSQL TEXT cannot store them) and other
+    control chars that have no place in extracted document text."""
+    if not text:
+        return ""
+    # Drop NUL outright; keep \n, \r, \t.
+    cleaned = text.replace("\x00", "")
+    return "".join(
+        ch for ch in cleaned if ch in ("\n", "\r", "\t") or ord(ch) >= 0x20
+    )
 
 
 def _parse_pdf(file_bytes: bytes) -> str:
